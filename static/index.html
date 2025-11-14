@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>手写数字识别</title>
+    <style>
+        canvas { border: 1px solid #000; }
+    </style>
+</head>
+<body>
+    <h1>手写数字识别</h1>
+    <canvas id="canvas" width="280" height="280"></canvas>
+    <br>
+    <button onclick="predict()">识别</button>
+    <button onclick="clearCanvas()">清空</button>
+    <p>预测结果: <span id="result"></span></p>
+    <p>概率: <span id="prob"></span></p>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+
+        // 画布绘制功能
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            ctx.beginPath();
+            ctx.moveTo(e.offsetX, e.offsetY);
+        });
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDrawing) {
+                ctx.lineTo(e.offsetX, e.offsetY);
+                ctx.lineWidth = 15;
+                ctx.lineCap = 'round';
+                ctx.strokeStyle = '#000';
+                ctx.stroke();
+            }
+        });
+        canvas.addEventListener('mouseup', () => isDrawing = false);
+        canvas.addEventListener('mouseout', () => isDrawing = false);
+
+        // 清空画布
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            document.getElementById('result').textContent = '';
+            document.getElementById('prob').textContent = '';
+        }
+
+        // 识别函数（转28x28并调用API）
+        function predict() {
+            // 将画布缩放为28x28（模型输入尺寸）
+            const smallCanvas = document.createElement('canvas');
+            smallCanvas.width = 28;
+            smallCanvas.height = 28;
+            const smallCtx = smallCanvas.getContext('2d');
+            smallCtx.drawImage(canvas, 0, 0, 28, 28);
+            
+            // 反转颜色（白底黑字转黑底白字）
+            const imageData = smallCtx.getImageData(0, 0, 28, 28);
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                imageData.data[i] = 255 - imageData.data[i];     // R
+                imageData.data[i+1] = 255 - imageData.data[i+1]; // G
+                imageData.data[i+2] = 255 - imageData.data[i+2]; // B
+            }
+            smallCtx.putImageData(imageData, 0, 0);
+
+            // 转base64传给后端
+            const base64 = smallCanvas.toDataURL('image/png').split(',')[1];
+            fetch('/api', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: base64 })
+            }).then(res => res.json())
+              .then(data => {
+                  document.getElementById('result').textContent = data.result;
+                  document.getElementById('prob').textContent = (data.probability * 100).toFixed(2) + '%';
+              });
+        }
+    </script>
+</body>
+</html>
